@@ -1,0 +1,19 @@
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2012
+Project("{C4B84325-D1F1-B811-7B3E-79076EDA1316}") = "MidiSelect", "MidiSelect.vcxproj", "{6CECC7FC-B243-3152-4B61-0B7D430C9FF4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6CECC7FC-B243-3152-4B61-0B7D430C9FF4}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6CECC7FC-B243-3152-4B61-0B7D430C9FF4}.Debug|Win32.Build.0 = Debug|Win32
+		{6CECC7FC-B243-3152-4B61-0B7D430C9FF4}.Release|Win32.ActiveCfg = Release|Win32
+		{6CECC7FC-B243-3152-4B61-0B7D430C9FF4}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

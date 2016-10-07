@@ -32,7 +32,7 @@ public:
     WebInputStream (const String& address, bool isPost, const MemoryBlock& postData,
                     URL::OpenStreamProgressCallback* progressCallback, void* progressCallbackContext,
                     const String& headers, int timeOutMs, StringPairArray* responseHeaders,
-                    const int maxRedirects)
+                    const int maxRedirects, const String& httpRequest)
         : multi (nullptr), curl (nullptr), headerList (nullptr), lastError (CURLE_OK),
           contentLength (-1), streamPos (0),
           finished (false), skipBytes (0),
@@ -41,7 +41,7 @@ public:
         statusCode = -1;
 
         if (init() && setOptions (address, timeOutMs, (responseHeaders != nullptr),
-                                  maxRedirects, headers, isPost, postData.getSize()))
+                                  maxRedirects, headers, isPost, httpRequest, postData.getSize()))
         {
             connect (responseHeaders, isPost, postData, progressCallback, progressCallbackContext);
         }
@@ -131,12 +131,19 @@ private:
     //==============================================================================
     bool setOptions (const String& address, int timeOutMs, bool wantsHeaders,
                      const int maxRedirects, const String& headers,
-                     bool isPost, size_t postSize)
+                     bool isPost, const String& httpRequest, size_t postSize)
     {
+        curl_version_info_data* data = curl_version_info (CURLVERSION_NOW);
+        jassert (data != nullptr);
+
+        String userAgent = String ("curl/") + data->version;
+
         if (curl_easy_setopt (curl, CURLOPT_URL, address.toRawUTF8()) == CURLE_OK
              && curl_easy_setopt (curl, CURLOPT_WRITEDATA, this) == CURLE_OK
              && curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, StaticCurlWrite) == CURLE_OK
-             && curl_easy_setopt (curl, CURLOPT_MAXREDIRS, static_cast<long> (maxRedirects)) == CURLE_OK)
+             && curl_easy_setopt (curl, CURLOPT_MAXREDIRS, static_cast<long> (maxRedirects)) == CURLE_OK
+             && curl_easy_setopt (curl, CURLOPT_USERAGENT, userAgent.toRawUTF8()) == CURLE_OK
+             && curl_easy_setopt (curl, CURLOPT_FOLLOWLOCATION, (maxRedirects > 0 ? 1 : 0)) == CURLE_OK)
         {
             if (isPost)
             {
@@ -146,6 +153,14 @@ private:
 
                 if (curl_easy_setopt (curl, CURLOPT_POST, 1) != CURLE_OK
                      || curl_easy_setopt (curl, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t> (postSize)) != CURLE_OK)
+                    return false;
+            }
+
+            // handle special http request commands
+            bool hasSpecialRequestCmd = isPost ? (httpRequest != "POST") : (httpRequest != "GET");
+            if (hasSpecialRequestCmd)
+            {
+                if (curl_easy_setopt (curl, CURLOPT_CUSTOMREQUEST, httpRequest.toRawUTF8()) != CURLE_OK)
                     return false;
             }
 
@@ -177,9 +192,11 @@ private:
 
             if (timeOutMs > 0)
             {
-                long timeOutSecs = static_cast<long> (ceil (static_cast<double> (timeOutMs) / 1000.0));
+                long timeOutSecs = ((long) timeOutMs + 999) / 1000;
 
-                if (curl_easy_setopt (curl, CURLOPT_CONNECTTIMEOUT, timeOutSecs) != CURLE_OK)
+                if (curl_easy_setopt (curl, CURLOPT_CONNECTTIMEOUT, timeOutSecs) != CURLE_OK
+                     || curl_easy_setopt (curl, CURLOPT_LOW_SPEED_LIMIT, 100) != CURLE_OK
+                     || curl_easy_setopt (curl, CURLOPT_LOW_SPEED_TIME, timeOutSecs) != CURLE_OK)
                     return false;
             }
 
@@ -424,9 +441,16 @@ private:
 
         size_t len = size * nmemb;
 
-        curlHeaders += String (ptr, len);
+        String header (ptr, len);
+
+        if (! header.contains (":") && header.startsWithIgnoreCase ("HTTP/"))
+            curlHeaders.clear();
+        else
+            curlHeaders += header;
+
         return len;
     }
+
 
     //==============================================================================
     // Static method wrappers

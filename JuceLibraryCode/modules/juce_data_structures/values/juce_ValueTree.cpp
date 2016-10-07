@@ -396,7 +396,7 @@ public:
         }
     }
 
-    bool isEquivalentTo (const SharedObject& other) const
+    bool isEquivalentTo (const SharedObject& other) const noexcept
     {
         if (type != other.type
              || properties.size() != other.properties.size()
@@ -465,7 +465,7 @@ public:
         {
         }
 
-        bool perform()
+        bool perform() override
         {
             jassert (! (isAddingNewProperty && target->hasProperty (name)));
 
@@ -477,7 +477,7 @@ public:
             return true;
         }
 
-        bool undo()
+        bool undo() override
         {
             if (isAddingNewProperty)
                 target->removeProperty (name, nullptr);
@@ -487,12 +487,12 @@ public:
             return true;
         }
 
-        int getSizeInUnits()
+        int getSizeInUnits() override
         {
             return (int) sizeof (*this); //xxx should be more accurate
         }
 
-        UndoableAction* createCoalescedAction (UndoableAction* nextAction)
+        UndoableAction* createCoalescedAction (UndoableAction* nextAction) override
         {
             if (! (isAddingNewProperty || isDeletingProperty))
             {
@@ -528,7 +528,7 @@ public:
             jassert (child != nullptr);
         }
 
-        bool perform()
+        bool perform() override
         {
             if (isDeleting)
                 target->removeChild (childIndex, nullptr);
@@ -538,7 +538,7 @@ public:
             return true;
         }
 
-        bool undo()
+        bool undo() override
         {
             if (isDeleting)
             {
@@ -555,7 +555,7 @@ public:
             return true;
         }
 
-        int getSizeInUnits()
+        int getSizeInUnits() override
         {
             return (int) sizeof (*this); //xxx should be more accurate
         }
@@ -577,24 +577,24 @@ public:
         {
         }
 
-        bool perform()
+        bool perform() override
         {
             parent->moveChild (startIndex, endIndex, nullptr);
             return true;
         }
 
-        bool undo()
+        bool undo() override
         {
             parent->moveChild (endIndex, startIndex, nullptr);
             return true;
         }
 
-        int getSizeInUnits()
+        int getSizeInUnits() override
         {
             return (int) sizeof (*this); //xxx should be more accurate
         }
 
-        UndoableAction* createCoalescedAction (UndoableAction* nextAction)
+        UndoableAction* createCoalescedAction (UndoableAction* nextAction) override
         {
             if (MoveChildAction* next = dynamic_cast<MoveChildAction*> (nextAction))
                 if (next->parent == parent && next->startIndex == endIndex)
@@ -627,18 +627,20 @@ ValueTree::ValueTree() noexcept
 {
 }
 
+#if JUCE_ALLOW_STATIC_NULL_VARIABLES
 const ValueTree ValueTree::invalid;
+#endif
 
 ValueTree::ValueTree (const Identifier& type)  : object (new ValueTree::SharedObject (type))
 {
     jassert (type.toString().isNotEmpty()); // All objects must be given a sensible type name!
 }
 
-ValueTree::ValueTree (SharedObject* so)  : object (so)
+ValueTree::ValueTree (SharedObject* so) noexcept  : object (so)
 {
 }
 
-ValueTree::ValueTree (const ValueTree& other)  : object (other.object)
+ValueTree::ValueTree (const ValueTree& other) noexcept  : object (other.object)
 {
 }
 
@@ -702,45 +704,61 @@ ValueTree ValueTree::createCopy() const
     return ValueTree (createCopyIfNotNull (object.get()));
 }
 
-bool ValueTree::hasType (const Identifier& typeName) const
+bool ValueTree::hasType (const Identifier& typeName) const noexcept
 {
     return object != nullptr && object->type == typeName;
 }
 
-Identifier ValueTree::getType() const
+Identifier ValueTree::getType() const noexcept
 {
     return object != nullptr ? object->type : Identifier();
 }
 
-ValueTree ValueTree::getParent() const
+ValueTree ValueTree::getParent() const noexcept
 {
     return ValueTree (object != nullptr ? object->parent
                                         : static_cast<SharedObject*> (nullptr));
 }
 
-ValueTree ValueTree::getSibling (const int delta) const
+ValueTree ValueTree::getSibling (const int delta) const noexcept
 {
     if (object == nullptr || object->parent == nullptr)
-        return invalid;
+        return ValueTree();
 
     const int index = object->parent->indexOf (*this) + delta;
     return ValueTree (object->parent->children.getObjectPointer (index));
 }
 
-const var& ValueTree::operator[] (const Identifier& name) const
+static const var& getNullVarRef() noexcept
 {
-    return object == nullptr ? var::null : object->properties[name];
+   #if JUCE_ALLOW_STATIC_NULL_VARIABLES
+    return var::null;
+   #else
+    static var nullVar;
+    return nullVar;
+   #endif
 }
 
-const var& ValueTree::getProperty (const Identifier& name) const
+const var& ValueTree::operator[] (const Identifier& name) const noexcept
 {
-    return object == nullptr ? var::null : object->properties[name];
+    return object == nullptr ? getNullVarRef() : object->properties[name];
+}
+
+const var& ValueTree::getProperty (const Identifier& name) const noexcept
+{
+    return object == nullptr ? getNullVarRef() : object->properties[name];
 }
 
 var ValueTree::getProperty (const Identifier& name, const var& defaultReturnValue) const
 {
     return object == nullptr ? defaultReturnValue
                              : object->properties.getWithDefault (name, defaultReturnValue);
+}
+
+const var* ValueTree::getPropertyPointer (const Identifier& name) const noexcept
+{
+    return object == nullptr ? nullptr
+                             : object->properties.getVarPointer (name);
 }
 
 ValueTree& ValueTree::setProperty (const Identifier& name, const var& newValue, UndoManager* undoManager)
@@ -754,7 +772,7 @@ ValueTree& ValueTree::setProperty (const Identifier& name, const var& newValue, 
     return *this;
 }
 
-bool ValueTree::hasProperty (const Identifier& name) const
+bool ValueTree::hasProperty (const Identifier& name) const noexcept
 {
     return object != nullptr && object->hasProperty (name);
 }
@@ -771,12 +789,12 @@ void ValueTree::removeAllProperties (UndoManager* const undoManager)
         object->removeAllProperties (undoManager);
 }
 
-int ValueTree::getNumProperties() const
+int ValueTree::getNumProperties() const noexcept
 {
     return object == nullptr ? 0 : object->properties.size();
 }
 
-Identifier ValueTree::getPropertyName (const int index) const
+Identifier ValueTree::getPropertyName (const int index) const noexcept
 {
     return object == nullptr ? Identifier()
                              : object->properties.getName (index);
@@ -841,7 +859,7 @@ Value ValueTree::getPropertyAsValue (const Identifier& name, UndoManager* const 
 }
 
 //==============================================================================
-int ValueTree::getNumChildren() const
+int ValueTree::getNumChildren() const noexcept
 {
     return object == nullptr ? 0 : object->children.size();
 }
@@ -851,6 +869,29 @@ ValueTree ValueTree::getChild (int index) const
     return ValueTree (object != nullptr ? object->children.getObjectPointer (index)
                                         : static_cast<SharedObject*> (nullptr));
 }
+
+ValueTree::Iterator::Iterator (const ValueTree& v, bool isEnd) noexcept
+   : internal (v.object != nullptr ? (isEnd ? v.object->children.end() : v.object->children.begin()) : nullptr)
+{}
+
+ValueTree::Iterator& ValueTree::Iterator::operator++() noexcept
+{
+    internal = static_cast<SharedObject**> (internal) + 1;
+    return *this;
+}
+
+bool ValueTree::Iterator::operator!= (const Iterator& other) const noexcept
+{
+    return internal != other.internal;
+}
+
+ValueTree ValueTree::Iterator::operator*() const
+{
+    return ValueTree (*static_cast<SharedObject**> (internal));
+}
+
+ValueTree::Iterator ValueTree::begin() const noexcept   { return Iterator (*this, false); }
+ValueTree::Iterator ValueTree::end() const noexcept     { return Iterator (*this, true); }
 
 ValueTree ValueTree::getChildWithName (const Identifier& type) const
 {
@@ -867,12 +908,12 @@ ValueTree ValueTree::getChildWithProperty (const Identifier& propertyName, const
     return object != nullptr ? object->getChildWithProperty (propertyName, propertyValue) : ValueTree();
 }
 
-bool ValueTree::isAChildOf (const ValueTree& possibleParent) const
+bool ValueTree::isAChildOf (const ValueTree& possibleParent) const noexcept
 {
     return object != nullptr && object->isAChildOf (possibleParent.object);
 }
 
-int ValueTree::indexOf (const ValueTree& child) const
+int ValueTree::indexOf (const ValueTree& child) const noexcept
 {
     return object != nullptr ? object->indexOf (child) : -1;
 }
@@ -958,22 +999,26 @@ XmlElement* ValueTree::createXml() const
 
 ValueTree ValueTree::fromXml (const XmlElement& xml)
 {
+    if (! xml.isTextElement())
+    {
+        ValueTree v (xml.getTagName());
+        v.object->properties.setFromXmlAttributes (xml);
+
+        forEachXmlChildElement (xml, e)
+            v.addChild (fromXml (*e), -1, nullptr);
+
+        return v;
+    }
+
     // ValueTrees don't have any equivalent to XML text elements!
-    jassert (! xml.isTextElement());
-
-    ValueTree v (xml.getTagName());
-    v.object->properties.setFromXmlAttributes (xml);
-
-    forEachXmlChildElement (xml, e)
-        v.addChild (fromXml (*e), -1, nullptr);
-
-    return v;
+    jassertfalse;
+    return ValueTree();
 }
 
 String ValueTree::toXmlString() const
 {
     const ScopedPointer<XmlElement> xml (createXml());
-    return xml != nullptr ? xml->createDocument ("") : String();
+    return xml != nullptr ? xml->createDocument (StringRef()) : String();
 }
 
 //==============================================================================
@@ -1062,7 +1107,12 @@ public:
         for (int i = 1 + r.nextInt (numElementsInArray (buffer) - 2); --i >= 0;)
             buffer[i] = chars [r.nextInt (sizeof (chars) - 1)];
 
-        return CharPointer_ASCII (buffer);
+        String result (buffer);
+
+        if (! XmlElement::isValidXmlName (result))
+            result = createRandomIdentifier (r);
+
+        return result;
     }
 
     static String createRandomWideCharString (Random& r)
@@ -1106,7 +1156,7 @@ public:
         return v;
     }
 
-    void runTest()
+    void runTest() override
     {
         beginTest ("ValueTree");
         Random r = getRandom();

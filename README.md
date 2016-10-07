@@ -8,7 +8,6 @@ There is no gui. This is very no-frills. I made it for a specific purpose in a f
 
 1. Make a simple screencast tutorial on how to use this in case anyone's interested.
 2. Support random or round-robbin down samples
-3. Make builds (Mac OS X, Windows & Linux) available on github
 
 ## License
 

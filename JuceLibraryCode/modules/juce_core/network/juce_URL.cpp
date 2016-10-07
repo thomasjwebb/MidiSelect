@@ -136,7 +136,7 @@ namespace URLHelpers
                 || url[i] == '+' || url[i] == '-' || url[i] == '.')
             ++i;
 
-        return url[i] == ':' ? i + 1 : 0;
+        return url.substring (i).startsWith ("://") ? i + 1 : 0;
     }
 
     static int findStartOfNetLocation (const String& url)
@@ -222,6 +222,13 @@ int URL::getPort() const
     return colonPos > 0 ? url.substring (colonPos + 1).getIntValue() : 0;
 }
 
+URL URL::withNewDomainAndPath (const String& newURL) const
+{
+    URL u (*this);
+    u.url = newURL;
+    return u;
+}
+
 URL URL::withNewSubPath (const String& newPath) const
 {
     const int startOfPath = URLHelpers::findStartOfPath (url);
@@ -249,7 +256,7 @@ void URL::createHeadersAndPostData (String& headers, MemoryBlock& headersAndPost
     if (filesToUpload.size() > 0)
     {
         // (this doesn't currently support mixing custom post-data with uploads..)
-        jassert (postData.isEmpty());
+        jassert (postData.getSize() == 0);
 
         const String boundary (String::toHexString (Random::getSystemRandom().nextInt64()));
 
@@ -335,7 +342,8 @@ InputStream* URL::createInputStream (const bool usePostCommand,
                                      const int timeOutMs,
                                      StringPairArray* const responseHeaders,
                                      int* statusCode,
-                                     const int numRedirectsToFollow) const
+                                     const int numRedirectsToFollow,
+                                     String httpRequestCmd) const
 {
     MemoryBlock headersAndPostData;
 
@@ -348,11 +356,14 @@ InputStream* URL::createInputStream (const bool usePostCommand,
     if (! headers.endsWithChar ('\n'))
         headers << "\r\n";
 
+    if (httpRequestCmd.isEmpty())
+        httpRequestCmd = usePostCommand ? "POST" : "GET";
+
     ScopedPointer<WebInputStream> wi (new WebInputStream (toString (! usePostCommand),
                                                           usePostCommand, headersAndPostData,
                                                           progressCallback, progressCallbackContext,
                                                           headers, timeOutMs, responseHeaders,
-                                                          numRedirectsToFollow));
+                                                          numRedirectsToFollow, httpRequestCmd));
 
     if (statusCode != nullptr)
         *statusCode = wi->statusCode;
@@ -411,6 +422,11 @@ URL URL::withParameters (const StringPairArray& parametersToAdd) const
 }
 
 URL URL::withPOSTData (const String& newPostData) const
+{
+    return withPOSTData (MemoryBlock (newPostData.toRawUTF8(), newPostData.getNumBytesAsUTF8()));
+}
+
+URL URL::withPOSTData (const MemoryBlock& newPostData) const
 {
     URL u (*this);
     u.postData = newPostData;
